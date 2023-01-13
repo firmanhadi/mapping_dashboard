@@ -1,19 +1,18 @@
 import streamlit as st
-import folium
-import leafmap.foliumap as leafmap
 import geopandas as gpd
 import pandas as pd
 import matplotlib.pyplot as plt
+import leafmap.foliumap as leafmap
 
-if 'district_selectbox' not in st.session_state:
-    st.session_state['district_selectbox'] = 'Bidar'
-    
-st.set_page_config(page_title="Dashboard", layout="wide")
 
-st.title('National Highway Dashboard')
 
-st.sidebar.title("About")
-st.sidebar.info('Explore the Roads')
+st.set_page_config(page_title='Dashboard', layout='wide')
+
+st.title('Highway Dashboard')
+
+st.sidebar.title('About')
+st.sidebar.info('Explore the Highway Statistics')
+
 
 data_url = 'https://storage.googleapis.com/spatialthoughts-public-data/python-dataviz/osm/'
 gpkg_file = 'karnataka.gpkg'
@@ -29,14 +28,28 @@ def read_csv(url):
     df = pd.read_csv(url)
     return df
     
-   
 gpkg_url = data_url + gpkg_file
 csv_url = data_url + csv_file
 districts_gdf = read_gdf(gpkg_url, 'karnataka_districts')
 roads_gdf = read_gdf(gpkg_url, 'karnataka_highways')
 lengths_df = read_csv(csv_url)
 
+# Create the chart
+# Create the chart
+districts = districts_gdf.DISTRICT.values
+district = st.sidebar.selectbox('Select a District', districts)
+overlay = st.sidebar.checkbox('Overlay roads')
+district_lengths = lengths_df[lengths_df['DISTRICT'] == district]
 
+fig, ax = plt.subplots(1, 1)
+district_lengths.plot(kind='bar', ax=ax, color=['blue', 'red'],
+    ylabel='Kilometers', xlabel='Category')
+ax.set_xticklabels([])
+stats = st.sidebar.pyplot(fig)
+
+## Create the map
+
+## Create the map
 
 m = leafmap.Map(
     layers_control=True,
@@ -44,28 +57,33 @@ m = leafmap.Map(
     measure_control=False,
     fullscreen_control=False,
 )
-
+m.add_basemap('CartoDB.DarkMatter')
 m.add_gdf(
     gdf=districts_gdf,
+    zoom_to_layer=False,
     layer_name='districts',
-    zoom_to_layer=True,
-    info_mode=None,
-    style={'color': 'black', 'fillOpacity': 0.3, 'weight': 0.5},
+    info_mode='on_click',
+    style={'color': '#7fcdbb', 'fillOpacity': 0.3, 'weight': 0.5},
     )
 
- 
-map_data = m.to_streamlit(500, 800, bidirectional=True)
+if overlay:
+    m.add_gdf(
+        gdf=roads_gdf,
+        zoom_to_layer=False,
+        layer_name='highways',
+        info_mode=None,
+        style={'color': '#225ea8', 'weight': 1.5},
+    )
+    
+selected_gdf = districts_gdf[districts_gdf['DISTRICT'] == district]
 
-if map_data['last_object_clicked']:
-    clicked_district = map_data['last_active_drawing']['properties']['DISTRICT']
-    st.session_state.district_selectbox = clicked_district
+m.add_gdf(
+    gdf=selected_gdf,
+    layer_name='selected',
+    zoom_to_layer=True,
+    info_mode=None,
+    style={'color': 'yellow', 'fill': None, 'weight': 2}
+ )
 
 
-districts = districts_gdf.DISTRICT.values
-district = st.sidebar.selectbox('Select a District', districts, key='district_selectbox')
-district_lengths = lengths_df[lengths_df['DISTRICT'] == district]
-
-fig, ax = plt.subplots(1, 1)
-district_lengths.plot(kind='bar', ax=ax, color=['blue', 'red', 'gray'], ylabel='Kilometers', xlabel='Category')
-ax.get_xaxis().set_ticklabels([])
-stats = st.sidebar.pyplot(fig)
+m_streamlit = m.to_streamlit(600, 600)
